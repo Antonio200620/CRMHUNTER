@@ -157,8 +157,9 @@ if (userCount.count === 0) {
     .run("admin@hunterai.com", "admin123", "Admin Hunter", "admin");
 }
 
+const app = express();
+
 async function startServer() {
-  const app = express();
   app.use(express.json());
 
   // Auth Routes
@@ -844,9 +845,13 @@ async function startServer() {
   }
 
   const PORT = 3000;
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (process.env.NODE_ENV !== "production") {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
 startServer();
+
+export default app;

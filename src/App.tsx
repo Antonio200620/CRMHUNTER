@@ -2649,7 +2649,7 @@ export default function App() {
       
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Mobile Header */}
-        <header className="lg:hidden p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/50 backdrop-blur-sm sticky top-0 z-30">
+        <header className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/50 backdrop-blur-sm sticky top-0 z-30">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
               <Zap className="text-white w-5 h-5 fill-current" />

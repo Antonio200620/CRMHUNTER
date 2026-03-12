@@ -1,0 +1,7 @@
+{
+  "name": "HunterAI CRM",
+  "description": "O CRM inteligente que trabalha para o vendedor. Automação total de pipeline, importação inteligente e IA assistente.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

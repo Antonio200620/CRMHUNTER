@@ -2427,7 +2427,7 @@ export default function App() {
   const [leadToEdit, setLeadToEdit] = useState<Lead | null>(null);
   const [quickCommand, setQuickCommand] = useState('');
   const [isProcessingCommand, setIsProcessingCommand] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [settings, setSettings] = useState<any>({ company_name: 'Minha Empresa CRM', currency: 'BRL' });
 
   const fetchData = useCallback(async () => {

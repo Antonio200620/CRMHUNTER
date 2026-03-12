@@ -63,55 +63,7 @@ import * as XLSX from 'xlsx';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
-import { firebaseService } from './services/firebaseService';
-import { auth } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, errorInfo: string }> {
-  constructor(props: { children: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false, errorInfo: '' };
-  }
-
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, errorInfo: error.message };
-  }
-
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error('ErrorBoundary caught an error', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
-          <div className="max-w-md w-full bg-zinc-900 border border-red-500/20 p-8 rounded-3xl shadow-2xl text-center">
-            <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-              <AlertCircle className="text-red-500 w-8 h-8" />
-            </div>
-            <h2 className="text-xl font-bold text-white mb-2">Ops! Algo deu errado.</h2>
-            <p className="text-zinc-400 text-sm mb-6">
-              Ocorreu um erro inesperado. Por favor, tente recarregar a página.
-            </p>
-            <div className="bg-zinc-950 p-4 rounded-xl mb-6 text-left overflow-auto max-h-40">
-              <code className="text-xs text-red-400 font-mono break-all">
-                {this.state.errorInfo}
-              </code>
-            </div>
-            <button 
-              onClick={() => window.location.reload()}
-              className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all"
-            >
-              Recarregar Página
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
+import { supabaseService } from './services/supabaseService';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -120,14 +72,14 @@ function cn(...inputs: ClassValue[]) {
 // --- Types ---
 
 interface Stage {
-  id: string;
+  id: number;
   name: string;
   color: string;
   order: number;
 }
 
 interface Lead {
-  id: string;
+  id: number;
   name: string;
   company: string;
   email: string;
@@ -137,7 +89,7 @@ interface Lead {
   location: string;
   size: string;
   cnpj: string;
-  stage_id: string;
+  stage_id: number;
   priority: 'High' | 'Medium' | 'Low';
   created_at: string;
   updated_at: string;
@@ -146,25 +98,16 @@ interface Lead {
 }
 
 interface Interaction {
-  id: string;
-  lead_id: string;
+  id: number;
+  lead_id: number;
   type: string;
   content: string;
   created_at: string;
 }
 
-interface Task {
-  id: string;
-  lead_id: string;
-  title: string;
-  due_date: string | null;
-  completed: boolean;
-  created_at: string;
-}
-
 // --- Components ---
 
-const Sidebar = ({ activeTab, setActiveTab, isOpen, onClose, settings, user, onLogout }: { activeTab: string, setActiveTab: (t: string) => void, isOpen: boolean, onClose: () => void, settings: any, user: any, onLogout: () => void }) => {
+const Sidebar = ({ activeTab, setActiveTab, isOpen, onClose, settings, user }: { activeTab: string, setActiveTab: (t: string) => void, isOpen: boolean, onClose: () => void, settings: any, user: any }) => {
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'pipeline', icon: Kanban, label: 'Pipeline' },
@@ -247,7 +190,7 @@ const Sidebar = ({ activeTab, setActiveTab, isOpen, onClose, settings, user, onL
               <p className="text-xs text-zinc-500 truncate">{user?.role === 'admin' ? 'Administrador' : 'Hunter Senior'}</p>
             </div>
             <button 
-              onClick={onLogout} 
+              onClick={() => window.location.reload()} 
               className="p-2 text-zinc-500 hover:text-red-400 transition-colors"
               title="Sair"
             >
@@ -275,11 +218,11 @@ const Login = ({ onLogin }: { onLogin: (user: any) => void }) => {
     
     try {
       if (isRegister) {
-        await firebaseService.register(email, password, name);
+        await supabaseService.register(email, password, name);
         setIsRegister(false);
         setError('Conta criada! Agora faça login.');
       } else {
-        const { user } = await firebaseService.login(email, password);
+        const { user } = await supabaseService.login(email, password);
         onLogin(user);
       }
     } catch (err: any) {
@@ -580,22 +523,26 @@ const LeadForm = ({
 };
 
 const Dashboard = ({ stats, onUpdate }: { stats: any, onUpdate: () => void }) => {
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
-  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<number | null>(null);
 
   if (!stats) return <div className="p-8 text-zinc-400">Carregando...</div>;
 
   const COLORS = ['#10b981', '#3b82f6', '#6366f1', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#8b5cf6'];
 
-  const handleSaveEdit = async (id: string) => {
-    await firebaseService.updateInteraction(id, { content: editContent });
+  const handleSaveEdit = async (id: number) => {
+    await fetch(`/api/interactions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: editContent })
+    });
     setEditingId(null);
     onUpdate();
   };
 
-  const handleDelete = async (id: string) => {
-    await firebaseService.deleteInteraction(id);
+  const handleDelete = async (id: number) => {
+    await fetch(`/api/interactions/${id}`, { method: 'DELETE' });
     setIsDeleting(null);
     onUpdate();
   };
@@ -800,7 +747,7 @@ const LeadsList = ({
   stages: Stage[], 
   onSelectLead: (lead: Lead) => void, 
   onEditLead: (lead: Lead) => void, 
-  onDeleteLead: (id: string) => void, 
+  onDeleteLead: (id: number) => void, 
   onCreateLead: () => void 
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -953,17 +900,17 @@ const Pipeline = ({
 }: { 
   stages: Stage[], 
   leads: Lead[], 
-  onMoveLead: (id: string, stageId: string) => void, 
-  onDeleteLead: (id: string) => void,
+  onMoveLead: (id: number, stageId: number) => void, 
+  onDeleteLead: (id: number) => void,
   onEditLead: (lead: Lead) => void,
   onSelectLead: (lead: Lead) => void,
   onCreateLead: () => void
 }) => {
-  const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
+  const [draggedLeadId, setDraggedLeadId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  const handleDragStart = (e: React.DragEvent, leadId: string) => {
+  const handleDragStart = (e: React.DragEvent, leadId: number) => {
     setDraggedLeadId(leadId);
     e.dataTransfer.setData('leadId', leadId.toString());
     e.dataTransfer.effectAllowed = 'move';
@@ -974,9 +921,9 @@ const Pipeline = ({
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = (e: React.DragEvent, stageId: string) => {
+  const handleDrop = (e: React.DragEvent, stageId: number) => {
     e.preventDefault();
-    const leadId = e.dataTransfer.getData('leadId');
+    const leadId = Number(e.dataTransfer.getData('leadId'));
     if (leadId && stageId) {
       onMoveLead(leadId, stageId);
     }
@@ -1211,7 +1158,7 @@ const ProfileView = ({ user, onUpdate }: { user: any, onUpdate: (u: any) => void
     setIsLoading(true);
     setMessage('');
     try {
-      const data = await firebaseService.updateProfile(user.id, { name });
+      const data = await supabaseService.updateProfile(user.id, { name });
       onUpdate({ ...user, name: data.name });
       setMessage('Perfil atualizado com sucesso!');
     } catch (err) {
@@ -1292,7 +1239,7 @@ const ProfileView = ({ user, onUpdate }: { user: any, onUpdate: (u: any) => void
 const SettingsView = ({ stages, settings, onUpdate }: { stages: Stage[], settings: any, onUpdate: () => void }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newStage, setNewStage] = useState({ name: '', color: '#94a3b8', order: stages.length + 1 });
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [editData, setEditData] = useState<any>(null);
   const [commandHistory, setCommandHistory] = useState<any[]>([]);
   const [companyName, setCompanyName] = useState(settings.company_name || 'Minha Empresa CRM');
@@ -1305,7 +1252,7 @@ const SettingsView = ({ stages, settings, onUpdate }: { stages: Stage[], setting
   }, [settings]);
 
   const fetchHistory = useCallback(async () => {
-    const data = await firebaseService.getQuickCommands();
+    const data = await supabaseService.getQuickCommands();
     setCommandHistory(data);
   }, []);
 
@@ -1316,7 +1263,7 @@ const SettingsView = ({ stages, settings, onUpdate }: { stages: Stage[], setting
   const handleAdd = async () => {
     if (!newStage.name) return;
     const nextOrder = stages.length > 0 ? Math.max(...stages.map(s => s.order)) + 1 : 1;
-    await firebaseService.createStage({
+    await supabaseService.createStage({
       ...newStage,
       order: nextOrder
     });
@@ -1325,7 +1272,7 @@ const SettingsView = ({ stages, settings, onUpdate }: { stages: Stage[], setting
     onUpdate();
   };
 
-  const handleMove = async (id: string, direction: 'up' | 'down') => {
+  const handleMove = async (id: number, direction: 'up' | 'down') => {
     const currentIndex = stages.findIndex(s => s.id === id);
     if (direction === 'up' && currentIndex === 0) return;
     if (direction === 'down' && currentIndex === stages.length - 1) return;
@@ -1336,8 +1283,8 @@ const SettingsView = ({ stages, settings, onUpdate }: { stages: Stage[], setting
 
     // Swap orders
     await Promise.all([
-      firebaseService.updateStage(currentStage.id, { order: otherStage.order }),
-      firebaseService.updateStage(otherStage.id, { order: currentStage.order })
+      supabaseService.updateStage(currentStage.id, { order: otherStage.order }),
+      supabaseService.updateStage(otherStage.id, { order: currentStage.order })
     ]);
 
     onUpdate();
@@ -1346,7 +1293,7 @@ const SettingsView = ({ stages, settings, onUpdate }: { stages: Stage[], setting
   const handleSaveSettings = async () => {
     setIsSavingSettings(true);
     try {
-      await firebaseService.updateSettings({
+      await supabaseService.updateSettings({
         company_name: companyName,
         currency: currency
       });
@@ -1356,23 +1303,23 @@ const SettingsView = ({ stages, settings, onUpdate }: { stages: Stage[], setting
     }
   };
 
-  const handleUpdate = async (id: string) => {
-    await firebaseService.updateStage(id, editData);
+  const handleUpdate = async (id: number) => {
+    await supabaseService.updateStage(id, editData);
     setEditingId(null);
     onUpdate();
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: number) => {
     try {
-      await firebaseService.deleteStage(id);
+      await supabaseService.deleteStage(id);
       onUpdate();
     } catch (err: any) {
       alert(err.message || 'Erro ao excluir estágio');
     }
   };
 
-  const handleDeleteHistory = async (id: string) => {
-    await firebaseService.deleteQuickCommand(id);
+  const handleDeleteHistory = async (id: number) => {
+    await supabaseService.deleteQuickCommand(id);
     fetchHistory();
   };
 
@@ -1582,10 +1529,10 @@ const ImportLeads = ({ onImport, stages }: { onImport: (leads: any[], filename: 
   const [headers, setHeaders] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [batches, setBatches] = useState<any[]>([]);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const fetchBatches = useCallback(async () => {
-    const data = await firebaseService.getImportBatches();
+    const data = await supabaseService.getImportBatches();
     setBatches(data);
   }, []);
 
@@ -1593,8 +1540,8 @@ const ImportLeads = ({ onImport, stages }: { onImport: (leads: any[], filename: 
     fetchBatches();
   }, [fetchBatches]);
 
-  const handleDeleteBatch = async (id: string) => {
-    await firebaseService.deleteImportBatch(id);
+  const handleDeleteBatch = async (id: number) => {
+    await supabaseService.deleteImportBatch(id);
     setDeletingId(null);
     fetchBatches();
   };
@@ -1876,7 +1823,7 @@ const Reports = ({ reportData }: { reportData: any }) => {
   const [reportName, setReportName] = useState('');
 
   const fetchSavedReports = useCallback(async () => {
-    const data = await firebaseService.getSavedReports();
+    const data = await supabaseService.getSavedReports();
     setSavedReports(data);
   }, []);
 
@@ -1887,7 +1834,7 @@ const Reports = ({ reportData }: { reportData: any }) => {
   const handleSaveReport = async () => {
     if (!reportName) return;
     setIsSaving(true);
-    await firebaseService.createSavedReport({
+    await supabaseService.createSavedReport({
       name: reportName,
       description: `Relatório gerado em ${format(new Date(), "dd/MM/yyyy")}`,
       config: reportData
@@ -1897,9 +1844,9 @@ const Reports = ({ reportData }: { reportData: any }) => {
     fetchSavedReports();
   };
 
-  const handleDeleteReport = async (id: string) => {
+  const handleDeleteReport = async (id: number) => {
     if (confirm('Excluir este relatório salvo?')) {
-      await firebaseService.deleteSavedReport(id);
+      await supabaseService.deleteSavedReport(id);
       fetchSavedReports();
     }
   };
@@ -2056,26 +2003,26 @@ const Reports = ({ reportData }: { reportData: any }) => {
 
 const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, stages: Stage[], onClose: () => void, onUpdate: () => void, onEdit: (lead: Lead) => void }) => {
   const [interactions, setInteractions] = useState<Interaction[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
   const [newNote, setNewNote] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDate, setNewTaskDate] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<'timeline' | 'tasks'>('timeline');
-  const [editingInteractionId, setEditingInteractionId] = useState<string | null>(null);
+  const [editingInteractionId, setEditingInteractionId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
   const [confirmDeleteLead, setConfirmDeleteLead] = useState(false);
-  const [confirmDeleteInteractionId, setConfirmDeleteInteractionId] = useState<string | null>(null);
+  const [confirmDeleteInteractionId, setConfirmDeleteInteractionId] = useState<number | null>(null);
 
   const fetchInteractions = useCallback(() => {
-    firebaseService.getInteractions(lead.id)
-      .then((data: any) => setInteractions(data as Interaction[]))
+    supabaseService.getInteractions(lead.id)
+      .then(setInteractions)
       .catch(err => console.error('Error fetching interactions:', err));
   }, [lead.id]);
 
   const fetchTasks = useCallback(() => {
-    firebaseService.getTasks(lead.id)
-      .then((data: any) => setTasks(data as Task[]))
+    supabaseService.getTasks(lead.id)
+      .then(setTasks)
       .catch(err => console.error('Error fetching tasks:', err));
   }, [lead.id]);
 
@@ -2088,7 +2035,7 @@ const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, s
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
     
-    await firebaseService.createTask({ 
+    await supabaseService.createTask({ 
       lead_id: lead.id, 
       title: newTaskTitle, 
       due_date: newTaskDate || null 
@@ -2098,19 +2045,19 @@ const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, s
     fetchTasks();
   };
 
-  const toggleTask = async (id: string, completed: boolean) => {
-    await firebaseService.updateTask(id, { completed: !completed });
+  const toggleTask = async (id: number, completed: boolean) => {
+    await supabaseService.updateTask(id, { completed: !completed });
     fetchTasks();
   };
 
-  const deleteTask = async (id: string) => {
-    await firebaseService.deleteTask(id);
+  const deleteTask = async (id: number) => {
+    await supabaseService.deleteTask(id);
     fetchTasks();
   };
 
   const handleDeleteLead = async () => {
     try {
-      await firebaseService.deleteLead(lead.id);
+      await supabaseService.deleteLead(lead.id);
       onUpdate();
       onClose();
     } catch (err) {
@@ -2118,9 +2065,9 @@ const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, s
     }
   };
 
-  const handleDeleteInteraction = async (id: string) => {
+  const handleDeleteInteraction = async (id: number) => {
     try {
-      await firebaseService.deleteInteraction(id);
+      await supabaseService.deleteInteraction(id);
       fetchInteractions();
       setConfirmDeleteInteractionId(null);
     } catch (err) {
@@ -2133,14 +2080,14 @@ const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, s
     setEditContent(interaction.content);
   };
 
-  const handleSaveEdit = async (id: string) => {
-    await firebaseService.updateInteraction(id, { content: editContent });
+  const handleSaveEdit = async (id: number) => {
+    await supabaseService.updateInteraction(id, { content: editContent });
     setEditingInteractionId(null);
     fetchInteractions();
   };
 
   const handleAddInteraction = async (type: string, content: string) => {
-    await firebaseService.createInteraction({
+    await supabaseService.createInteraction({
       lead_id: lead.id,
       type,
       content
@@ -2167,7 +2114,7 @@ const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, s
         }
         
         if (Object.keys(updates).length > 0) {
-          await firebaseService.updateLead(lead.id, updates);
+          await supabaseService.updateLead(lead.id, updates);
         }
       }
       
@@ -2237,7 +2184,7 @@ const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, s
                 value={lead.stage_id}
                 onChange={async (e) => {
                   const newStageId = Number(e.target.value);
-                  await firebaseService.updateLead(lead.id, { stage_id: newStageId });
+                  await supabaseService.updateLead(lead.id, { stage_id: newStageId });
                   onUpdate();
                 }}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-white focus:ring-2 focus:ring-emerald-500/20 outline-none"
@@ -2483,46 +2430,20 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [settings, setSettings] = useState<any>({ company_name: 'Minha Empresa CRM', currency: 'BRL' });
 
-  const [isAuthReady, setIsAuthReady] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Fetch user profile
-        try {
-          const userDoc = await firebaseService.login(firebaseUser.email!, ''); // This is a hack, ideally we'd have a getProfile method
-          // Actually, let's just set the user from firebaseUser for now and fetch profile in fetchData
-          setUser({
-            id: firebaseUser.uid,
-            email: firebaseUser.email,
-            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário',
-            role: 'user' // Default
-          });
-        } catch (err) {
-          console.error('Error setting user:', err);
-        }
-      } else {
-        setUser(null);
-      }
-      setIsAuthReady(true);
-    });
-    return () => unsubscribe();
-  }, []);
-
   const fetchData = useCallback(async () => {
     if (!user) return;
     try {
       const [stagesData, leadsData, settingsData] = await Promise.all([
-        firebaseService.getStages() as Promise<Stage[]>,
-        firebaseService.getLeads() as Promise<Lead[]>,
-        firebaseService.getSettings()
+        supabaseService.getStages(),
+        supabaseService.getLeads(),
+        supabaseService.getSettings()
       ]);
       
-      const statsData = await firebaseService.getDashboardStats(leadsData, stagesData);
+      const statsData = await supabaseService.getDashboardStats(leadsData, stagesData);
       // For reports, we can use a simplified version or fetch more data
       const reportData = {
         monthlyProspecting: [], // Simplified for now
-        companyTable: leadsData.filter((l: Lead) => l.company).map((l: Lead) => ({ company: l.company, segment: l.segment, location: l.location, created_at: l.created_at })),
+        companyTable: leadsData.filter(l => l.company).map(l => ({ company: l.company, segment: l.segment, location: l.location, created_at: l.created_at })),
         segmentBreakdown: [] // Simplified
       };
 
@@ -2552,9 +2473,11 @@ export default function App() {
 
   const handleImport = async (importedLeads: any[], filename: string) => {
     try {
-      // In Firebase we don't have import_batches yet in the service, let's just create leads
+      const batch = await supabaseService.createImportBatch(filename, importedLeads.length);
+      const batchId = batch.id;
+
       for (const lead of importedLeads) {
-        await firebaseService.createLead(lead);
+        await supabaseService.createLead({ ...lead, batch_id: batchId });
       }
       await fetchData();
       setActiveTab('leads');
@@ -2563,14 +2486,14 @@ export default function App() {
     }
   };
 
-  const handleMoveLead = async (leadId: any, stageId: any) => {
-    await firebaseService.updateLead(leadId, { stage_id: stageId });
+  const handleMoveLead = async (leadId: number, stageId: number) => {
+    await supabaseService.updateLead(leadId, { stage_id: stageId });
     fetchData();
   };
 
-  const handleDeleteLead = async (leadId: any) => {
+  const handleDeleteLead = async (leadId: number) => {
     try {
-      await firebaseService.deleteLead(leadId);
+      await supabaseService.deleteLead(leadId);
       fetchData();
       if (selectedLead?.id === leadId) setSelectedLead(null);
     } catch (err) {
@@ -2580,9 +2503,9 @@ export default function App() {
 
   const handleSaveLead = async (data: any) => {
     if (leadToEdit) {
-      await firebaseService.updateLead(leadToEdit.id, data);
+      await supabaseService.updateLead(leadToEdit.id, data);
     } else {
-      await firebaseService.createLead(data);
+      await supabaseService.createLead(data);
     }
     
     setIsLeadFormOpen(false);
@@ -2594,7 +2517,7 @@ export default function App() {
   const [commandHistory, setCommandHistory] = useState<any[]>([]);
 
   const fetchCommandHistory = useCallback(async () => {
-    const data = await firebaseService.getQuickCommands();
+    const data = await supabaseService.getQuickCommands();
     setCommandHistory(data);
   }, []);
 
@@ -2626,7 +2549,7 @@ export default function App() {
       let summary = result.data?.summary || "Comando processado";
 
       if (result.action === 'create_lead') {
-        await firebaseService.createLead({
+        await supabaseService.createLead({
           ...result.data,
           comment: "Lead criado via comando: " + commandText
         });
@@ -2643,17 +2566,17 @@ export default function App() {
           if (stage) updates.stage_id = stage.id;
         }
 
-        await firebaseService.updateLead(targetLead.id, updates);
+        await supabaseService.updateLead(targetLead.id, updates);
 
         // Add interaction note
-        await firebaseService.createInteraction({
+        await supabaseService.createInteraction({
           lead_id: targetLead.id,
           type: 'note',
           content: result.data.summary || commandText
         });
         summary = `Lead "${targetLead.name}" atualizado: ${result.data.summary || 'dados alterados'}`;
       } else if (result.action === 'delete_lead' && targetLead) {
-        await firebaseService.deleteLead(targetLead.id);
+        await supabaseService.deleteLead(targetLead.id);
         if (selectedLead && targetLead.id === selectedLead.id) {
           setSelectedLead(null);
         }
@@ -2663,7 +2586,7 @@ export default function App() {
         summary = `Lead "${targetLead.name}" localizado.`;
       } else if (targetLead) {
         // Default: add note
-        await firebaseService.createInteraction({
+        await supabaseService.createInteraction({
           lead_id: targetLead.id,
           type: 'note',
           content: commandText
@@ -2674,7 +2597,7 @@ export default function App() {
       }
       
       // Save to history
-      await firebaseService.createQuickCommand(commandText, summary);
+      await supabaseService.createQuickCommand(commandText, summary);
 
       setQuickCommand('');
       fetchData();
@@ -2695,38 +2618,19 @@ export default function App() {
     }
   };
 
-  const handleLogout = async () => {
-    await firebaseService.logout();
-    setUser(null);
-  };
-
-  if (!isAuthReady) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   if (!user) {
-    return (
-      <ErrorBoundary>
-        <Login onLogin={setUser} />
-      </ErrorBoundary>
-    );
+    return <Login onLogin={setUser} />;
   }
 
   return (
-    <ErrorBoundary>
-      <div className="flex min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-emerald-500/30">
-        <Sidebar 
+    <div className="flex min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-emerald-500/30">
+      <Sidebar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
         settings={settings}
         user={user}
-        onLogout={handleLogout}
       />
       
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
@@ -2961,6 +2865,5 @@ export default function App() {
         </form>
       </div>
     </div>
-  </ErrorBoundary>
-);
+  );
 }

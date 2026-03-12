@@ -2428,6 +2428,7 @@ export default function App() {
   const [quickCommand, setQuickCommand] = useState('');
   const [isProcessingCommand, setIsProcessingCommand] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const [settings, setSettings] = useState<any>({ company_name: 'Minha Empresa CRM', currency: 'BRL' });
 
   const fetchData = useCallback(async () => {
@@ -2617,6 +2618,18 @@ export default function App() {
       setIsProcessingCommand(false);
     }
   };
+  useEffect(() => {
+  const handleResize = () => {
+    const desktop = window.innerWidth >= 1024;
+    setIsDesktop(desktop);
+    setIsSidebarOpen(desktop);
+  };
+
+  handleResize();
+  window.addEventListener('resize', handleResize);
+
+  return () => window.removeEventListener('resize', handleResize);
+}, []);
 
   if (!user) {
     return <Login onLogin={setUser} />;
@@ -2631,6 +2644,7 @@ export default function App() {
         onClose={() => setIsSidebarOpen(false)} 
         settings={settings}
         user={user}
+        isDesktop={isDesktop}
       />
       
       <main className="flex-1 flex flex-col h-screen overflow-hidden">

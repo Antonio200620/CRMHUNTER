@@ -81,6 +81,7 @@ interface Stage {
 interface Lead {
   id: number;
   name: string;
+  job_title?: string;
   company: string;
   email: string;
   phone: string;
@@ -95,6 +96,7 @@ interface Lead {
   updated_at: string;
   last_interaction: string;
   stage_name?: string;
+  batch_id?: number;
 }
 
 interface Interaction {
@@ -354,6 +356,7 @@ const LeadForm = ({
 }) => {
   const [formData, setFormData] = useState({
     name: lead?.name || '',
+    job_title: lead?.job_title || '',
     company: lead?.company || '',
     email: lead?.email || '',
     phone: lead?.phone || '',
@@ -396,6 +399,15 @@ const LeadForm = ({
                 onChange={e => setFormData({ ...formData, name: e.target.value })}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:ring-2 focus:ring-emerald-500/20 outline-none"
                 placeholder="Ex: João Silva"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Cargo</label>
+              <input 
+                value={formData.job_title}
+                onChange={e => setFormData({ ...formData, job_title: e.target.value })}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                placeholder="Ex: Diretor de Vendas"
               />
             </div>
             <div className="space-y-2">
@@ -813,7 +825,10 @@ const LeadsList = ({
                           </div>
                           <div>
                             <p className="text-sm font-bold text-white">{lead.name}</p>
-                            <p className="text-xs text-zinc-500">{lead.email}</p>
+                            <div className="flex flex-col">
+                              {lead.job_title && <p className="text-[10px] text-emerald-500/80 font-medium">{lead.job_title}</p>}
+                              <p className="text-[10px] text-zinc-500">{lead.email}</p>
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -1120,6 +1135,7 @@ const Pipeline = ({
                         </div>
                       </div>
                       <h4 className="text-white font-bold text-sm leading-tight mb-1">{lead.name}</h4>
+                      {lead.job_title && <p className="text-emerald-500/80 text-[10px] mb-1">{lead.job_title}</p>}
                       <p className="text-zinc-500 text-xs mb-3 flex items-center gap-1">
                         <Building2 className="w-3 h-3" />
                         {lead.company}
@@ -1241,6 +1257,8 @@ const SettingsView = ({ stages, settings, onUpdate }: { stages: Stage[], setting
   const [newStage, setNewStage] = useState({ name: '', color: '#94a3b8', order: stages.length + 1 });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editData, setEditData] = useState<any>(null);
+  const [editingHistoryId, setEditingHistoryId] = useState<number | null>(null);
+  const [editHistoryData, setEditHistoryData] = useState<any>(null);
   const [commandHistory, setCommandHistory] = useState<any[]>([]);
   const [companyName, setCompanyName] = useState(settings.company_name || 'Minha Empresa CRM');
   const [currency, setCurrency] = useState(settings.currency || 'BRL');
@@ -1314,12 +1332,18 @@ const SettingsView = ({ stages, settings, onUpdate }: { stages: Stage[], setting
       await supabaseService.deleteStage(id);
       onUpdate();
     } catch (err: any) {
-      alert(err.message || 'Erro ao excluir estágio');
+      console.error('Erro ao excluir estágio:', err);
     }
   };
 
   const handleDeleteHistory = async (id: number) => {
     await supabaseService.deleteQuickCommand(id);
+    fetchHistory();
+  };
+
+  const handleUpdateHistory = async (id: number) => {
+    await supabaseService.updateQuickCommand(id, editHistoryData);
+    setEditingHistoryId(null);
     fetchHistory();
   };
 
@@ -1498,20 +1522,54 @@ const SettingsView = ({ stages, settings, onUpdate }: { stages: Stage[], setting
               ) : (
                 commandHistory.map(cmd => (
                   <div key={cmd.id} className="bg-zinc-950 border border-zinc-800 p-4 rounded-2xl group relative">
-                    <div className="flex justify-between items-start mb-2">
-                      <p className="text-xs font-medium text-white italic truncate max-w-[180px]">"{cmd.command}"</p>
-                      <button 
-                        onClick={() => handleDeleteHistory(cmd.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/10 rounded-lg text-zinc-500 hover:text-red-400 transition-all"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-zinc-400 leading-relaxed">{cmd.result}</p>
-                    <div className="mt-2 flex items-center justify-between text-[9px] text-zinc-600">
-                      <span>Processado por IA</span>
-                      <span>{format(new Date(cmd.created_at), "HH:mm - dd/MM")}</span>
-                    </div>
+                    {editingHistoryId === cmd.id ? (
+                      <div className="space-y-3">
+                        <input 
+                          value={editHistoryData.command}
+                          onChange={e => setEditHistoryData({ ...editHistoryData, command: e.target.value })}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white"
+                          placeholder="Comando"
+                        />
+                        <textarea 
+                          value={editHistoryData.result}
+                          onChange={e => setEditHistoryData({ ...editHistoryData, result: e.target.value })}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white h-20"
+                          placeholder="Resultado"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => handleUpdateHistory(cmd.id)} className="text-emerald-400 text-[10px] font-bold uppercase">Salvar</button>
+                          <button onClick={() => setEditingHistoryId(null)} className="text-zinc-500 text-[10px] font-bold uppercase">Cancelar</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-xs font-medium text-white italic truncate max-w-[180px]">"{cmd.command}"</p>
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => {
+                                setEditingHistoryId(cmd.id);
+                                setEditHistoryData({ command: cmd.command, result: cmd.result });
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-white transition-all"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteHistory(cmd.id)}
+                              className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/10 rounded-lg text-zinc-500 hover:text-red-400 transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-zinc-400 leading-relaxed">{cmd.result}</p>
+                        <div className="mt-2 flex items-center justify-between text-[9px] text-zinc-600">
+                          <span>Processado por IA</span>
+                          <span>{format(new Date(cmd.created_at), "HH:mm - dd/MM")}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))
               )}
@@ -1523,13 +1581,16 @@ const SettingsView = ({ stages, settings, onUpdate }: { stages: Stage[], setting
   );
 };
 
-const ImportLeads = ({ onImport, stages }: { onImport: (leads: any[], filename: string) => void, stages: Stage[] }) => {
+const ImportLeads = ({ onImport, stages, leads }: { onImport: (leads: any[], filename: string) => void, stages: Stage[], leads: Lead[] }) => {
   const [file, setFile] = useState<File | null>(null);
   const [mapping, setMapping] = useState<any>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [batches, setBatches] = useState<any[]>([]);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingBatchId, setEditingBatchId] = useState<number | null>(null);
+  const [editBatchData, setEditBatchData] = useState<any>(null);
+  const [viewingBatchLeads, setViewingBatchLeads] = useState<any[] | null>(null);
 
   const fetchBatches = useCallback(async () => {
     const data = await supabaseService.getImportBatches();
@@ -1546,6 +1607,17 @@ const ImportLeads = ({ onImport, stages }: { onImport: (leads: any[], filename: 
     fetchBatches();
   };
 
+  const handleUpdateBatch = async (id: number) => {
+    await supabaseService.updateImportBatch(id, editBatchData);
+    setEditingBatchId(null);
+    fetchBatches();
+  };
+
+  const handleViewBatchLeads = async (batchId: number) => {
+    const batchLeads = leads.filter(l => l.batch_id === batchId);
+    setViewingBatchLeads(batchLeads);
+  };
+
   const [error, setError] = useState<string | null>(null);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -1558,21 +1630,27 @@ const ImportLeads = ({ onImport, stages }: { onImport: (leads: any[], filename: 
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonRaw = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
         
-        // Find the first row that looks like a header (has multiple non-empty cells)
-        const headerRowIndex = jsonRaw.findIndex(row => row.filter(cell => cell !== null && cell !== "").length >= 2);
+        let allHeaders: string[] = [];
+        workbook.SheetNames.forEach(name => {
+          const worksheet = workbook.Sheets[name];
+          const jsonRaw = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+          const headerRowIndex = jsonRaw.findIndex(row => row.filter(cell => cell !== null && cell !== "").length >= 2);
+          if (headerRowIndex !== -1) {
+            const fileHeaders = jsonRaw[headerRowIndex].map(h => String(h || "").trim()).filter(h => h !== "");
+            fileHeaders.forEach(h => {
+              if (!allHeaders.includes(h)) allHeaders.push(h);
+            });
+          }
+        });
         
-        if (headerRowIndex !== -1) {
-          const fileHeaders = jsonRaw[headerRowIndex].map(h => String(h || "").trim()).filter(h => h !== "");
-          setHeaders(fileHeaders);
+        if (allHeaders.length > 0) {
+          setHeaders(allHeaders);
           
           // Call AI to map columns
           setIsProcessing(true);
           try {
-            const aiMapping = await geminiService.mapSpreadsheetColumns(fileHeaders);
+            const aiMapping = await geminiService.mapSpreadsheetColumns(allHeaders);
             setMapping(aiMapping);
           } catch (err: any) {
             console.error("AI Mapping failed", err);
@@ -1611,45 +1689,50 @@ const ImportLeads = ({ onImport, stages }: { onImport: (leads: any[], filename: 
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
         
-        // Get raw data to find header row
-        const jsonRaw = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-        const headerRowIndex = jsonRaw.findIndex(row => row.filter(cell => cell !== null && cell !== "").length >= 2);
+        let allFormattedLeads: any[] = [];
         
-        if (headerRowIndex === -1) throw new Error("No headers found");
-
-        // Convert to objects starting from the header row
-        const json = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex }) as any[];
-        
-        const formattedLeads = json.map(row => {
-          const lead: any = {};
-          Object.entries(mapping).forEach(([crmField, sheetHeader]) => {
-            // Find the value even if there are slight variations in header naming or whitespace
-            const actualHeader = Object.keys(row).find(k => k.trim() === (sheetHeader as string).trim());
-            const value = actualHeader ? row[actualHeader] : null;
+        workbook.SheetNames.forEach(sheetName => {
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonRaw = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+          const headerRowIndex = jsonRaw.findIndex(row => row.filter(cell => cell !== null && cell !== "").length >= 2);
+          
+          if (headerRowIndex !== -1) {
+            const json = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex }) as any[];
+            const formattedLeads = json.map(row => {
+              const lead: any = {};
+              Object.entries(mapping).forEach(([crmField, sheetHeader]) => {
+                const actualHeader = Object.keys(row).find(k => k.trim().toLowerCase() === (sheetHeader as string).trim().toLowerCase());
+                const value = actualHeader ? row[actualHeader] : null;
+                
+                if (crmField === 'stage') {
+                  const stageName = String(value || "").toLowerCase();
+                  const stage = stages.find(s => s.name.toLowerCase() === stageName);
+                  if (stage) {
+                    lead.stage_id = stage.id;
+                  }
+                } else {
+                  lead[crmField] = value;
+                }
+              });
+              return lead;
+            }).filter(l => l.name);
             
-            if (crmField === 'stage') {
-              const stageName = String(value || "").toLowerCase();
-              const stage = stages.find(s => s.name.toLowerCase() === stageName);
-              if (stage) {
-                lead.stage_id = stage.id;
-              }
-            } else {
-              lead[crmField] = value;
-            }
-          });
-          return lead;
-        }).filter(l => l.name); // Ensure name exists
+            allFormattedLeads = [...allFormattedLeads, ...formattedLeads];
+          }
+        });
         
-        await onImport(formattedLeads, file.name);
+        if (allFormattedLeads.length === 0) {
+          throw new Error("Nenhum lead válido encontrado em nenhuma das abas.");
+        }
+        
+        await onImport(allFormattedLeads, file.name);
         setFile(null);
         setMapping(null);
         setTimeout(fetchBatches, 1000);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Import failed", err);
-        setError("Erro ao processar a planilha. Verifique o formato do arquivo.");
+        setError(err.message || "Erro ao processar a planilha. Verifique o formato do arquivo.");
       } finally {
         setIsImporting(false);
       }
@@ -1777,7 +1860,17 @@ const ImportLeads = ({ onImport, stages }: { onImport: (leads: any[], filename: 
                         <span className="text-sm font-bold text-white truncate max-w-[150px]">{batch.filename}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        {deletingId === batch.id ? (
+                        {editingBatchId === batch.id ? (
+                          <div className="flex items-center gap-2">
+                            <input 
+                              value={editBatchData.filename}
+                              onChange={e => setEditBatchData({ ...editBatchData, filename: e.target.value })}
+                              className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-white"
+                            />
+                            <button onClick={() => handleUpdateBatch(batch.id)} className="text-emerald-400"><Check className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => setEditingBatchId(null)} className="text-zinc-500"><X className="w-3.5 h-3.5" /></button>
+                          </div>
+                        ) : deletingId === batch.id ? (
                           <div className="flex items-center gap-2">
                             <button 
                               onClick={() => handleDeleteBatch(batch.id)}
@@ -1793,12 +1886,29 @@ const ImportLeads = ({ onImport, stages }: { onImport: (leads: any[], filename: 
                             </button>
                           </div>
                         ) : (
-                          <button 
-                            onClick={() => setDeletingId(batch.id)}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/10 rounded-lg text-zinc-500 hover:text-red-400 transition-all"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => {
+                                setEditingBatchId(batch.id);
+                                setEditBatchData({ filename: batch.filename });
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-white transition-all"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={() => handleViewBatchLeads(batch.id)}
+                              className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-emerald-400 transition-all"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={() => setDeletingId(batch.id)}
+                              className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/10 rounded-lg text-zinc-500 hover:text-red-400 transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1813,6 +1923,52 @@ const ImportLeads = ({ onImport, stages }: { onImport: (leads: any[], filename: 
           </div>
         </div>
       </div>
+
+      {/* Batch Leads Modal */}
+      {viewingBatchLeads && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
+          >
+            <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-white">Leads da Importação</h3>
+              <button onClick={() => setViewingBatchLeads(null)} className="text-zinc-500 hover:text-white">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-3">
+                {viewingBatchLeads.length === 0 ? (
+                  <p className="text-zinc-500 text-center py-8">Nenhum lead encontrado para esta importação.</p>
+                ) : (
+                  viewingBatchLeads.map(lead => (
+                    <div key={lead.id} className="bg-zinc-950 border border-zinc-800 p-4 rounded-2xl flex justify-between items-center">
+                      <div>
+                        <p className="text-white font-bold">{lead.name}</p>
+                        <p className="text-xs text-zinc-500">{lead.company || 'Sem empresa'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-zinc-400">{lead.email || 'Sem email'}</p>
+                        <p className="text-[10px] text-zinc-600">{lead.phone || 'Sem telefone'}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="p-6 border-t border-zinc-800 flex justify-end">
+              <button 
+                onClick={() => setViewingBatchLeads(null)}
+                className="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2 rounded-xl text-sm font-bold transition-all"
+              >
+                Fechar
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1845,9 +2001,11 @@ const Reports = ({ reportData }: { reportData: any }) => {
   };
 
   const handleDeleteReport = async (id: number) => {
-    if (confirm('Excluir este relatório salvo?')) {
+    try {
       await supabaseService.deleteSavedReport(id);
       fetchSavedReports();
+    } catch (error) {
+      console.error('Failed to delete report:', error);
     }
   };
 
@@ -2001,7 +2159,7 @@ const Reports = ({ reportData }: { reportData: any }) => {
   );
 };
 
-const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, stages: Stage[], onClose: () => void, onUpdate: () => void, onEdit: (lead: Lead) => void }) => {
+const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit, setToast }: { lead: Lead, stages: Stage[], onClose: () => void, onUpdate: () => void, onEdit: (lead: Lead) => void, setToast: (toast: any) => void }) => {
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [newNote, setNewNote] = useState('');
@@ -2104,7 +2262,7 @@ const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, s
       await handleAddInteraction('note', newNote);
       
       // 2. Processa com IA para ver se há comandos (ex: mudar estágio)
-      const result = await geminiService.processNaturalLanguage(newNote, lead.id);
+      const result = await geminiService.processNaturalLanguage(newNote, lead.id, stages.map(s => s.name));
       
       if (result.action === 'update_lead') {
         const updates: any = {};
@@ -2115,6 +2273,7 @@ const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, s
         
         if (Object.keys(updates).length > 0) {
           await supabaseService.updateLead(lead.id, updates);
+          setToast({ message: `Lead movido para: ${result.data.stage_name}`, type: 'success' });
         }
       }
       
@@ -2123,6 +2282,7 @@ const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, s
       onUpdate();
     } catch (error: any) {
       console.error('AI Processing failed:', error);
+      setToast({ message: "Erro ao processar nota com IA", type: 'error' });
       const errorMessage = error?.message || '';
       if (errorMessage.includes('API key') || errorMessage.includes('400')) {
         if ((window as any).aistudio) {
@@ -2150,7 +2310,9 @@ const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, s
           </div>
           <div>
             <h2 className="text-lg lg:text-xl font-bold text-white truncate max-w-[200px] sm:max-w-none">{lead.name}</h2>
-            <p className="text-xs lg:text-sm text-zinc-500 truncate max-w-[200px] sm:max-w-none">{lead.company}</p>
+            <p className="text-xs lg:text-sm text-zinc-500 truncate max-w-[200px] sm:max-w-none">
+              {lead.job_title ? `${lead.job_title} @ ` : ''}{lead.company}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -2193,6 +2355,10 @@ const LeadDetail = ({ lead, stages, onClose, onUpdate, onEdit }: { lead: Lead, s
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
+            </div>
+            <div className="bg-zinc-900/50 border border-zinc-800 p-3 rounded-xl">
+              <p className="text-[10px] text-zinc-500 uppercase mb-1">Cargo</p>
+              <p className="text-sm text-white truncate">{lead.job_title || '-'}</p>
             </div>
             <div className="bg-zinc-900/50 border border-zinc-800 p-3 rounded-xl">
               <p className="text-[10px] text-zinc-500 uppercase mb-1">E-mail</p>
@@ -2425,11 +2591,18 @@ export default function App() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
   const [leadToEdit, setLeadToEdit] = useState<Lead | null>(null);
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const [quickCommand, setQuickCommand] = useState('');
   const [isProcessingCommand, setIsProcessingCommand] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [settings, setSettings] = useState<any>({ company_name: 'Minha Empresa CRM', currency: 'BRL' });
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -2476,12 +2649,26 @@ export default function App() {
     try {
       const batch = await supabaseService.createImportBatch(filename, importedLeads.length);
       const batchId = batch.id;
+      const defaultStageId = stages.length > 0 ? stages[0].id : 1;
 
       for (const lead of importedLeads) {
-        await supabaseService.createLead({ ...lead, batch_id: batchId });
+        const { comment, ...leadData } = lead;
+        const newLead = await supabaseService.createLead({ 
+          ...leadData, 
+          stage_id: leadData.stage_id || defaultStageId,
+          batch_id: batchId 
+        });
+
+        if (comment) {
+          await supabaseService.createInteraction({
+            lead_id: newLead.id,
+            type: 'note',
+            content: comment
+          });
+        }
       }
       await fetchData();
-      setActiveTab('leads');
+      setActiveTab('pipeline'); // Change to pipeline as requested by user context
     } catch (error) {
       console.error('Import failed:', error);
     }
@@ -2503,15 +2690,45 @@ export default function App() {
   };
 
   const handleSaveLead = async (data: any) => {
-    if (leadToEdit) {
-      await supabaseService.updateLead(leadToEdit.id, data);
-    } else {
-      await supabaseService.createLead(data);
+    try {
+      const { comment, ...leadData } = data;
+      
+      // Convert value to number if present
+      if (leadData.value) {
+        leadData.value = parseFloat(String(leadData.value).replace(/[^\d.-]/g, '')) || 0;
+      }
+
+      if (leadToEdit) {
+        await supabaseService.updateLead(leadToEdit.id, leadData);
+        if (comment) {
+          await supabaseService.createInteraction({
+            lead_id: leadToEdit.id,
+            type: 'note',
+            content: comment
+          });
+        }
+      } else {
+        const defaultStageId = stages.length > 0 ? stages[0].id : 1;
+        const newLead = await supabaseService.createLead({
+          ...leadData,
+          stage_id: leadData.stage_id || defaultStageId
+        });
+        
+        if (comment) {
+          await supabaseService.createInteraction({
+            lead_id: newLead.id,
+            type: 'note',
+            content: comment
+          });
+        }
+      }
+      
+      setIsLeadFormOpen(false);
+      setLeadToEdit(null);
+      fetchData();
+    } catch (error) {
+      console.error('Error saving lead:', error);
     }
-    
-    setIsLeadFormOpen(false);
-    setLeadToEdit(null);
-    fetchData();
   };
 
   const [showCommandHistory, setShowCommandHistory] = useState(false);
@@ -2535,29 +2752,68 @@ export default function App() {
     const commandText = quickCommand.trim();
     setIsProcessingCommand(true);
     try {
-      const result = await geminiService.processNaturalLanguage(commandText);
+      const result = await geminiService.processNaturalLanguage(commandText, undefined, stages.map(s => s.name));
       let targetLead = null;
+      const query = (result.target_lead_query || result.data?.name || "").toLowerCase().trim();
 
-      // Try to find lead by query if no specific ID
-      if (result.target_lead_query) {
-        const query = result.target_lead_query.toLowerCase();
+      if (query) {
+        // 1. Try exact match
         targetLead = leads.find(l => 
-          l.name.toLowerCase().includes(query) || 
-          (l.company && l.company.toLowerCase().includes(query))
+          l.name.toLowerCase() === query || 
+          (l.company && l.company.toLowerCase() === query)
         );
+        
+        // 2. Try partial match (contains)
+        if (!targetLead) {
+          targetLead = leads.find(l => 
+            l.name.toLowerCase().includes(query) || 
+            (l.company && l.company.toLowerCase().includes(query))
+          );
+        }
+        
+        // 3. Try matching by words (useful for "Antonio da Coca Cola" matching "Antonio")
+        if (!targetLead && query.length > 3) {
+          const queryWords = query.split(/\s+/).filter(w => w.length > 2);
+          targetLead = leads.find(l => {
+            const leadName = l.name.toLowerCase();
+            const leadCompany = (l.company || "").toLowerCase();
+            return queryWords.some(word => leadName.includes(word) || leadCompany.includes(word));
+          });
+        }
       }
 
       let summary = result.data?.summary || "Comando processado";
 
       if (result.action === 'create_lead') {
-        await supabaseService.createLead({
-          ...result.data,
-          comment: "Lead criado via comando: " + commandText
+        const defaultStageId = stages.length > 0 ? stages[0].id : 1;
+        let stageId = defaultStageId;
+        
+        if (result.data.stage_name) {
+          const stage = stages.find(s => s.name.toLowerCase() === result.data.stage_name.toLowerCase());
+          if (stage) stageId = stage.id;
+        }
+
+        const newLead = await supabaseService.createLead({
+          name: result.data.name,
+          job_title: result.data.job_title,
+          company: result.data.company,
+          email: result.data.email,
+          phone: result.data.phone,
+          stage_id: stageId
         });
+
+        await supabaseService.createInteraction({
+          lead_id: newLead.id,
+          type: 'note',
+          content: "Lead criado via comando: " + commandText
+        });
+
         summary = `Lead "${result.data.name}" criado com sucesso.`;
+        setToast({ message: summary, type: 'success' });
       } else if (result.action === 'update_lead' && targetLead) {
         const updates: any = {};
         if (result.data.name) updates.name = result.data.name;
+        if (result.data.job_title) updates.job_title = result.data.job_title;
         if (result.data.company) updates.company = result.data.company;
         if (result.data.email) updates.email = result.data.email;
         if (result.data.phone) updates.phone = result.data.phone;
@@ -2576,12 +2832,14 @@ export default function App() {
           content: result.data.summary || commandText
         });
         summary = `Lead "${targetLead.name}" atualizado: ${result.data.summary || 'dados alterados'}`;
+        setToast({ message: summary, type: 'success' });
       } else if (result.action === 'delete_lead' && targetLead) {
         await supabaseService.deleteLead(targetLead.id);
         if (selectedLead && targetLead.id === selectedLead.id) {
           setSelectedLead(null);
         }
         summary = `Lead "${targetLead.name}" excluído.`;
+        setToast({ message: summary, type: 'success' });
       } else if (result.action === 'search_lead' && targetLead) {
         setSelectedLead(targetLead);
         summary = `Lead "${targetLead.name}" localizado.`;
@@ -2593,43 +2851,41 @@ export default function App() {
           content: commandText
         });
         summary = `Nota adicionada ao lead "${targetLead.name}".`;
+        setToast({ message: summary, type: 'success' });
       } else {
         summary = "Não foi possível identificar o lead ou a ação desejada.";
+        setToast({ message: summary, type: 'error' });
       }
       
       // Save to history
       await supabaseService.createQuickCommand(commandText, summary);
 
       setQuickCommand('');
-      fetchData();
+      await fetchData();
+      fetchCommandHistory();
+      
+      if (result.action === 'search_lead' && targetLead) {
+        setActiveTab('pipeline');
+      }
     } catch (error: any) {
       console.error('AI Processing failed:', error);
       const errorMessage = error?.message || '';
+      
       if (errorMessage.includes('API key') || errorMessage.includes('400')) {
+        setToast({ 
+          message: "Erro na chave de API do Gemini. Por favor, verifique as configurações no menu de chaves.", 
+          type: 'error' 
+        });
         if ((window as any).aistudio) {
-          if (confirm('Erro na chave de API do Gemini. Deseja selecionar uma nova chave?')) {
-            (window as any).aistudio.openSelectKey();
-          }
-        } else {
-          alert('Erro na chave de API do Gemini. Verifique as configurações.');
+          (window as any).aistudio.openSelectKey();
         }
+      } else {
+        setToast({ message: "Erro ao processar comando: " + (error.message || "Erro desconhecido"), type: 'error' });
       }
     } finally {
       setIsProcessingCommand(false);
     }
   };
-  useEffect(() => {
-  const handleResize = () => {
-    const desktop = window.innerWidth >= 1024;
-    setIsDesktop(desktop);
-    setIsSidebarOpen(desktop);
-  };
-
-  handleResize();
-  window.addEventListener('resize', handleResize);
-
-  return () => window.removeEventListener('resize', handleResize);
-}, []);
 
   if (!user) {
     return <Login onLogin={setUser} />;
@@ -2644,12 +2900,11 @@ export default function App() {
         onClose={() => setIsSidebarOpen(false)} 
         settings={settings}
         user={user}
-        isDesktop={isDesktop}
       />
       
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Mobile Header */}
-        <header className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/50 backdrop-blur-sm sticky top-0 z-30">
+        <header className="lg:hidden p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/50 backdrop-blur-sm sticky top-0 z-30">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
               <Zap className="text-white w-5 h-5 fill-current" />
@@ -2745,7 +3000,7 @@ export default function App() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <ImportLeads onImport={handleImport} stages={stages} />
+                <ImportLeads onImport={handleImport} stages={stages} leads={leads} />
               </motion.div>
             )}
 
@@ -2793,6 +3048,7 @@ export default function App() {
                 setLeadToEdit(lead);
                 setIsLeadFormOpen(true);
               }}
+              setToast={setToast}
             />
           </>
         )}
@@ -2843,6 +3099,28 @@ export default function App() {
                   ))
                 )}
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {toast && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className={cn(
+                "fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border backdrop-blur-xl",
+                toast.type === 'success' 
+                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+                  : "bg-red-500/10 border-red-500/20 text-red-400"
+              )}
+            >
+              {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+              <span className="text-sm font-bold">{toast.message}</span>
+              <button onClick={() => setToast(null)} className="ml-2 hover:opacity-70">
+                <X className="w-4 h-4" />
+              </button>
             </motion.div>
           )}
         </AnimatePresence>

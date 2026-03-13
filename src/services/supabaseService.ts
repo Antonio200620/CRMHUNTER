@@ -84,6 +84,10 @@ export const supabaseService = {
   },
 
   async deleteLead(id: number | string) {
+    // Delete related data first
+    await supabase.from('interactions').delete().eq('lead_id', id);
+    await supabase.from('tasks').delete().eq('lead_id', id);
+    
     const { error } = await supabase
       .from('leads')
       .delete()
@@ -227,6 +231,17 @@ export const supabaseService = {
     return data;
   },
 
+  async updateQuickCommand(id: number | string, updates: any) {
+    const { data, error } = await supabase
+      .from('quick_commands')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
   async deleteQuickCommand(id: number | string) {
     const { error } = await supabase
       .from('quick_commands')
@@ -275,7 +290,21 @@ export const supabaseService = {
     if (error) throw error;
   },
 
+  async updateImportBatch(id: number | string, updates: any) {
+    const { data, error } = await supabase
+      .from('import_batches')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
   async deleteImportBatch(id: number | string) {
+    // First delete leads associated with this batch
+    await supabase.from('leads').delete().eq('batch_id', id);
+
     const { error } = await supabase
       .from('import_batches')
       .delete()
